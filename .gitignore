@@ -1,0 +1,24 @@
+# Trained model (Large file)
+trainer.yml
+
+# Database and Dataset
+dataset/
+data/
+attendance.db
+
+# Generated Reports
+*.csv
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Build folders
+build/
+dist/
+*.spec
+
+# IDE settings
+.vscode/
+.idea/
