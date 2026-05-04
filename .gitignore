@@ -1,18 +1,30 @@
-# Trained model (Large file)
-trainer.yml
-
-# Database and Dataset
-dataset/
-data/
-attendance.db
-
-# Generated Reports
-*.csv
-
 # Python cache
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# AI Models and Datasets
+# Ignore captured photos
+dataset/
+# Ignore trained LBPH models (they can be regenerated)
+models/*.yml
+
+# Database
+# Ignore actual data, but keep the database folder if needed
+database/*.db
+!database/.gitkeep
+
+# Generated Reports
+*.csv
+*.xlsx
+Attendance_Reports/
+output/
 
 # PyInstaller / Build folders
 build/
@@ -22,3 +34,7 @@ dist/
 # IDE settings
 .vscode/
 .idea/
+
+# OS files
+.DS_Store
+Thumbs.db
