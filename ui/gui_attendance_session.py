@@ -6,6 +6,17 @@ import numpy as np
 from datetime import datetime
 from tkinter import messagebox
 import glob
+import sys
+
+# Import common preprocessing function to ensure consistency with training phase
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
+from services.face_service import preprocess_face
+
+# --- Recognition Constants --------------------------------------------------------
+CONFIDENCE_THRESHOLD = 70   # Confidence threshold (lower is stricter/more accurate)
+REQUIRED_VOTES = 5           # Number of consecutive frames required to confirm recognition
 
 def get_db_path():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -73,18 +84,20 @@ def start_attendance_session(subject_selection, week_selection):
             messagebox.showwarning("Warning", "No students enrolled.")
             return
 
-        student_dict = {int(row[1]): row[2] for row in enrolled_students}
+        student_dict = {int(row[0]): row[2] for row in enrolled_students}
         previously_attended = set()
         cursor.execute('''
-            SELECT s.university_id FROM Attendance a
+            SELECT e.student_id FROM Attendance a
             JOIN Enrollments e ON a.enrollment_id = e.enrollment_id
-            JOIN Students s ON e.student_id = s.student_id
             WHERE e.subject_id = ? AND a.date = ? AND a.status = 'Present' AND a.week_number = ?
         ''', (subject_id, today_date, week_number))
         for row in cursor.fetchall(): previously_attended.add(int(row[0]))
 
         attended_today = set()
-        cam = cv2.VideoCapture(0)
+        vote_counter = {}  # {db_student_id: number of correct frames}
+        cam = cv2.VideoCapture(1)
+        cam.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         while True:
             ret, img = cam.read()
             if not ret: break
@@ -94,34 +107,65 @@ def start_attendance_session(subject_selection, week_selection):
             detections = net.forward()
             for i in range(0, detections.shape[2]):
                 confidence = detections[0, 0, i, 2]
-                if confidence > 0.5:
+                if confidence > 0.3:
                     box = detections[0, 0, i, 3:7] * np.array([w_img, h_img, w_img, h_img])
                     (startX, startY, endX, endY) = box.astype("int")
                     startX, startY = max(0, startX), max(0, startY)
                     endX, endY = min(w_img, endX), min(h_img, endY)
+                    
+                    # -- Debug: Always draw a white rectangle to confirm the camera detected a face --
+                    cv2.rectangle(img, (startX, startY), (endX, endY), (255, 255, 255), 1)
+
                     face_roi = img[startY:endY, startX:endX]
                     if face_roi.size == 0: continue
                     gray_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
+
+                    # --- Apply same preprocessing as training (Resize + CLAHE) -----------------
+                    gray_face = preprocess_face(gray_face)
+
                     predicted_id, lbph_confidence = recognizer.predict(gray_face)
-                    if lbph_confidence < 65:
+
+                    if lbph_confidence < CONFIDENCE_THRESHOLD:
                         if predicted_id in student_dict:
                             name = student_dict[predicted_id]
-                            if predicted_id in previously_attended:
+                            # --- Multi-frame voting system --------------------------
+                            if predicted_id not in attended_today and predicted_id not in previously_attended:
+                                # Increase vote count
+                                vote_counter[predicted_id] = vote_counter.get(predicted_id, 0) + 1
+                                votes = vote_counter[predicted_id]
+                                # Show progress bar
+                                progress = int((votes / REQUIRED_VOTES) * (endX - startX))
+                                cv2.rectangle(img, (startX, endY + 4), (startX + progress, endY + 12), (0, 200, 255), -1)
+                                cv2.putText(img, f"{name} ({votes}/{REQUIRED_VOTES})",
+                                            (startX, startY - 10), 0, 0.7, (0, 200, 255), 2)
+                                cv2.rectangle(img, (startX, startY), (endX, endY), (0, 200, 255), 2)
+                                if votes >= REQUIRED_VOTES:
+                                    attended_today.add(predicted_id)
+                                    vote_counter[predicted_id] = 0  # Reset counter
+                            elif predicted_id in previously_attended:
                                 cv2.rectangle(img, (startX, startY), (endX, endY), (255, 255, 0), 2)
-                                cv2.putText(img, f"{name} (Tamam)", (startX, startY-10), 0, 0.7, (255, 255, 0), 2)
+                                cv2.putText(img, f"{name} (Already Present)", (startX, startY-10), 0, 0.7, (255, 255, 0), 2)
                             else:
-                                attended_today.add(predicted_id)
+                                # Attendance recorded in this session
                                 cv2.rectangle(img, (startX, startY), (endX, endY), (0, 255, 0), 2)
-                                cv2.putText(img, f"{name} (Burada)", (startX, startY-10), 0, 0.8, (0, 255, 0), 2)
+                                cv2.putText(img, f"{name} (Done)", (startX, startY-10), 0, 0.8, (0, 255, 0), 2)
+                        else:
+                            # Face known to AI but not enrolled in this subject!
+                            cv2.rectangle(img, (startX, startY), (endX, endY), (0, 165, 255), 2)
+                            cv2.putText(img, f"Not in class ID:{predicted_id}", (startX, startY-10), 0, 0.6, (0, 165, 255), 2)
                     else:
                         cv2.rectangle(img, (startX, startY), (endX, endY), (0, 0, 255), 2)
+                        cv2.putText(img, f"? ({lbph_confidence:.0f})", (startX, startY-10), 0, 0.6, (0, 0, 255), 2)
+            
+            # -- Show text to confirm camera is reading frames --
+            cv2.putText(img, "Scanning... Please wait", (10, 30), 0, 0.7, (0, 255, 0), 2)
             cv2.imshow('Yoklama Sistemi', img)
             if cv2.waitKey(10) & 0xFF == 27: break
         cam.release(); cv2.destroyAllWindows()
         
         for student in enrolled_students:
-            db_student_id, uni_id = student[0], int(student[1])
-            status = "Present" if (uni_id in previously_attended or uni_id in attended_today) else "Absent"
+            db_student_id = student[0]
+            status = "Present" if (db_student_id in previously_attended or db_student_id in attended_today) else "Absent"
             cursor.execute("SELECT enrollment_id FROM Enrollments WHERE student_id=? AND subject_id=?", (db_student_id, subject_id))
             enrollment_id = cursor.fetchone()[0]
             cursor.execute("SELECT attendance_id, status FROM Attendance WHERE enrollment_id=? AND date=? AND week_number=?", (enrollment_id, today_date, week_number))

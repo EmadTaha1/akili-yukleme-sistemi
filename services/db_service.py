@@ -35,16 +35,23 @@ def search_student_global(query):
 
 def search_enrolled_students(subject_id, query):
     """STRICT SEARCH: Fetch only students enrolled in the specific subject."""
-    if not query.strip(): return []
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT s.student_id, s.university_id, s.name 
-            FROM Students s
-            JOIN Enrollments e ON s.student_id = e.student_id
-            WHERE e.subject_id = ? AND (s.name LIKE ? OR s.university_id LIKE ?)
-        ''', (subject_id, '%'+query+'%', '%'+query+'%'))
+        if not query.strip():
+            cursor.execute('''
+                SELECT s.student_id, s.university_id, s.name 
+                FROM Students s
+                JOIN Enrollments e ON s.student_id = e.student_id
+                WHERE e.subject_id = ?
+            ''', (subject_id,))
+        else:
+            cursor.execute('''
+                SELECT s.student_id, s.university_id, s.name 
+                FROM Students s
+                JOIN Enrollments e ON s.student_id = e.student_id
+                WHERE e.subject_id = ? AND (s.name LIKE ? OR CAST(s.university_id AS TEXT) LIKE ?)
+            ''', (subject_id, '%'+query+'%', '%'+query+'%'))
         return cursor.fetchall()
 
 def search_external_students(subject_id, query):
@@ -91,8 +98,8 @@ def enroll_student(student_db_id, subject_id):
         cursor.execute("INSERT INTO Enrollments (student_id, subject_id) VALUES (?, ?)", (student_db_id, subject_id))
         conn.commit()
 
-def update_student_face_path(student_db_id, uni_id):
-    face_path = f"dataset/User.{uni_id}"
+def update_student_face_path(student_db_id, face_id):
+    face_path = f"dataset/User.{face_id}"
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
@@ -126,12 +133,12 @@ def process_excel_upload(file_path, subject_id):
         conn.commit()
     return new_s, enr_s
 
-def get_enrolled_university_ids(subject_id):
+def get_enrolled_student_ids(subject_id):
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT Students.university_id FROM Enrollments 
+            SELECT Students.student_id FROM Enrollments 
             JOIN Students ON Enrollments.student_id = Students.student_id 
             WHERE Enrollments.subject_id = ?
         ''', (subject_id,))

@@ -11,11 +11,11 @@ sys.path.append(base_dir)
 
 from services import db_service, model_trainer
 
-def capture_face_dataset(uni_id):
+def capture_face_dataset(face_id):
     """Deep Learning (DNN) logic to capture 100 face samples."""
-    cam = cv2.VideoCapture(0)
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cam = cv2.VideoCapture(1)
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, 640)   # Reduce resolution from 1280 to save memory
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)  # Perfectly sufficient for face recognition
     
     prototxt_path = os.path.join(base_dir, "models", "dnn_model", "deploy.prototxt")
     model_path = os.path.join(base_dir, "models", "dnn_model", "res10_300x300_ssd_iter_140000.caffemodel")
@@ -55,7 +55,7 @@ def capture_face_dataset(uni_id):
                 cv2.rectangle(img, (startX, startY), (endX, endY), (255, 0, 0), 2)
                 
                 count += 1
-                cv2.imwrite(os.path.join(dataset_path, f"User.{uni_id}.{count}.jpg"), gray_face)
+                cv2.imwrite(os.path.join(dataset_path, f"User.{face_id}.{count}.jpg"), gray_face)
                 if count >= 100: break
                 
         cv2.imshow('Fotoğraf Çekiliyor - Kameraya Bakınız', img)
@@ -119,10 +119,10 @@ def handle_capture(subject_dropdown, student_dropdown):
         messagebox.showinfo("Info", f"{student_name} already has a face print registered in this subject.")
     else:
         messagebox.showinfo("Kamera Hazır", f"'{student_name}' için yüz verisi bulunamadı.\nKamerayı başlatmak için Tamam'a basın.")
-        success = capture_face_dataset(uni_id)
+        success = capture_face_dataset(student_db_id)
         
         if success:
-            db_service.update_student_face_path(student_db_id, uni_id)
+            db_service.update_student_face_path(student_db_id, student_db_id)
             # Automate Training
             model_trainer.train_lbph_model(subject_id)
             messagebox.showinfo("Başarılı", f"'{student_name}' için yüz kaydı yapıldı ve sistem otomatik olarak eğitildi!")
@@ -181,7 +181,7 @@ class StudentEnrollmentWindow(ctk.CTkToplevel):
 
         subject_label = ctk.CTkLabel(tab, text="1. Ders Seçin:")
         subject_label.pack(pady=(10, 0))
-        self.capture_subject_dropdown = ctk.CTkComboBox(tab, width=350)
+        self.capture_subject_dropdown = ctk.CTkComboBox(tab, width=350, command=self.on_subject_change)
         self.capture_subject_dropdown.pack(pady=5)
         load_subjects(self.capture_subject_dropdown)
 
@@ -208,6 +208,14 @@ class StudentEnrollmentWindow(ctk.CTkToplevel):
         process_btn = ctk.CTkButton(tab, text="Fotoğraf Çek", fg_color="#C85000", hover_color="#9c3e00", width=350, height=40,
                                     command=lambda: handle_capture(self.capture_subject_dropdown, self.result_dropdown))
         process_btn.pack(pady=30)
+        
+        # Trigger initial update after everything is created
+        if self.capture_subject_dropdown.get() != "No subjects found":
+            self.on_subject_change(self.capture_subject_dropdown.get())
+
+    def on_subject_change(self, choice):
+        self.search_entry.delete(0, "end")
+        handle_strict_search(self.search_entry, self.capture_subject_dropdown, self.result_dropdown)
 
     def setup_excel_tab(self):
         tab = self.tabview.tab("Excel Yükleme")
