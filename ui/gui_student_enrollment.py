@@ -11,20 +11,75 @@ sys.path.append(base_dir)
 
 from services import db_service, model_trainer
 
+def get_resource_path(relative_path):
+    """ 
+    Get absolute path to resource, works for dev and for PyInstaller.
+    Checks multiple possible locations to ensure compatibility across modes.
+    """
+    possible_paths = []
+    
+    if getattr(sys, 'frozen', False):
+        # 1. PyInstaller _internal directory (One Directory mode)
+        if hasattr(sys, '_MEIPASS'):
+            possible_paths.append(sys._MEIPASS)
+        # 2. PyInstaller executable directory (Root of One Directory)
+        possible_paths.append(os.path.dirname(sys.executable))
+    else:
+        # 3. Development environment root directory
+        possible_paths.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+    for base_path in possible_paths:
+        full_path = os.path.join(base_path, relative_path)
+        if os.path.exists(full_path):
+            return full_path
+            
+    # Fallback to the first expected path if none exist
+    if possible_paths:
+        return os.path.join(possible_paths[0], relative_path)
+    return relative_path
+
+def load_dnn_model_safe(prototxt_path, model_path):
+    """Safely load DNN models bypassing OpenCV's Unicode path bug on Windows."""
+    try:
+        # Method 1: Change Working Directory temporarily to pass ASCII filenames
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(prototxt_path))
+            return cv2.dnn.readNetFromCaffe(os.path.basename(prototxt_path), os.path.basename(model_path))
+        finally:
+            os.chdir(orig_cwd)
+    except Exception:
+        # Method 2: Copy to an English-only Public path as fallback
+        import shutil
+        import uuid
+        safe_dir = os.path.join(os.environ.get('PUBLIC', 'C:\\'), f"dnn_temp_{uuid.uuid4().hex[:6]}")
+        os.makedirs(safe_dir, exist_ok=True)
+        safe_proto = os.path.join(safe_dir, "deploy.prototxt")
+        safe_model = os.path.join(safe_dir, "model.caffemodel")
+        shutil.copy(prototxt_path, safe_proto)
+        shutil.copy(model_path, safe_model)
+        try:
+            return cv2.dnn.readNetFromCaffe(safe_proto, safe_model)
+        finally:
+            try:
+                shutil.rmtree(safe_dir)
+            except Exception:
+                pass
+
 def capture_face_dataset(face_id):
     """Deep Learning (DNN) logic to capture 100 face samples."""
-    cam = cv2.VideoCapture(1)
+    cam = cv2.VideoCapture(0)
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, 640)   # Reduce resolution from 1280 to save memory
     cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)  # Perfectly sufficient for face recognition
     
-    prototxt_path = os.path.join(base_dir, "models", "dnn_model", "deploy.prototxt")
-    model_path = os.path.join(base_dir, "models", "dnn_model", "res10_300x300_ssd_iter_140000.caffemodel")
+    prototxt_path = get_resource_path(os.path.join("models", "dnn_model", "deploy.prototxt"))
+    model_path = get_resource_path(os.path.join("models", "dnn_model", "res10_300x300_ssd_iter_140000.caffemodel"))
     dataset_path = os.path.join(base_dir, "dataset")
 
     try:
-        net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
-    except Exception:
-        messagebox.showerror("Error", "DNN model files missing in 'dnn_model' directory.")
+        net = load_dnn_model_safe(prototxt_path, model_path)
+    except Exception as e:
+        messagebox.showerror("Error", f"DNN model load failed even with fallback.\nReason: {str(e)}")
         return False
     
     if not os.path.exists(dataset_path):
@@ -58,7 +113,7 @@ def capture_face_dataset(face_id):
                 cv2.imwrite(os.path.join(dataset_path, f"User.{face_id}.{count}.jpg"), gray_face)
                 if count >= 100: break
                 
-        cv2.imshow('Fotoğraf Çekiliyor - Kameraya Bakınız', img)
+        cv2.imshow('Fotograf Cekiliyor - Kameraya Bakiniz', img)
         if cv2.waitKey(10) & 0xFF == 27 or count >= 100:
             break
 

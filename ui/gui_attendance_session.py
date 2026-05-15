@@ -38,6 +38,66 @@ def find_model_file(base_dir, subject_id):
     files = glob.glob(pattern)
     return files[0] if files else None
 
+def get_resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        # Fallback to current directory in development mode
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+def load_dnn_model_safe(prototxt_path, model_path):
+    """Safely load DNN models bypassing OpenCV's Unicode path bug on Windows."""
+    try:
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(prototxt_path))
+            return cv2.dnn.readNetFromCaffe(os.path.basename(prototxt_path), os.path.basename(model_path))
+        finally:
+            os.chdir(orig_cwd)
+    except Exception:
+        import shutil
+        import uuid
+        safe_dir = os.path.join(os.environ.get('PUBLIC', 'C:\\'), f"dnn_temp_{uuid.uuid4().hex[:6]}")
+        os.makedirs(safe_dir, exist_ok=True)
+        safe_proto = os.path.join(safe_dir, "deploy.prototxt")
+        safe_model = os.path.join(safe_dir, "model.caffemodel")
+        shutil.copy(prototxt_path, safe_proto)
+        shutil.copy(model_path, safe_model)
+        try:
+            return cv2.dnn.readNetFromCaffe(safe_proto, safe_model)
+        finally:
+            try:
+                shutil.rmtree(safe_dir)
+            except Exception:
+                pass
+
+def load_lbph_model_safe(recognizer, model_path):
+    """Safely load LBPH models bypassing OpenCV's Unicode path bug on Windows."""
+    try:
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(model_path))
+            recognizer.read(os.path.basename(model_path))
+        finally:
+            os.chdir(orig_cwd)
+    except Exception:
+        import shutil
+        import uuid
+        safe_dir = os.path.join(os.environ.get('PUBLIC', 'C:\\'), f"lbph_temp_{uuid.uuid4().hex[:6]}")
+        os.makedirs(safe_dir, exist_ok=True)
+        safe_model = os.path.join(safe_dir, "model.yml")
+        shutil.copy(model_path, safe_model)
+        try:
+            recognizer.read(safe_model)
+        finally:
+            try:
+                shutil.rmtree(safe_dir)
+            except Exception:
+                pass
+
 def start_attendance_session(subject_selection, week_selection):
     if not subject_selection or "No" in subject_selection or subject_selection == "Ders Seçin":
         messagebox.showerror("Error", "Please select a valid subject first!")
@@ -57,17 +117,17 @@ def start_attendance_session(subject_selection, week_selection):
         
     recognizer = cv2.face.LBPHFaceRecognizer_create()
     try:
-        recognizer.read(model_path)
+        load_lbph_model_safe(recognizer, model_path)
     except:
         messagebox.showerror("Error", "Failed to load the AI model.")
         return
 
-    prototxt_path = os.path.join(base_dir, "models", "dnn_model", "deploy.prototxt")
-    dnn_model_path = os.path.join(base_dir, "models", "dnn_model", "res10_300x300_ssd_iter_140000.caffemodel")
+    prototxt_path = get_resource_path(os.path.join("models", "dnn_model", "deploy.prototxt"))
+    dnn_model_path = get_resource_path(os.path.join("models", "dnn_model", "res10_300x300_ssd_iter_140000.caffemodel"))
     try:
-        net = cv2.dnn.readNetFromCaffe(prototxt_path, dnn_model_path)
+        net = load_dnn_model_safe(prototxt_path, dnn_model_path)
     except:
-        messagebox.showerror("Error", "DNN models not found.")
+        messagebox.showerror("Error", "DNN models not found or failed to load.")
         return
     
     with sqlite3.connect(get_db_path()) as conn:
@@ -95,7 +155,7 @@ def start_attendance_session(subject_selection, week_selection):
 
         attended_today = set()
         vote_counter = {}  # {db_student_id: number of correct frames}
-        cam = cv2.VideoCapture(1)
+        cam = cv2.VideoCapture(0)
         cam.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         while True:

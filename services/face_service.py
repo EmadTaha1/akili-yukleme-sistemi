@@ -1,5 +1,6 @@
 import cv2
 import os
+import sys
 import shutil
 import numpy as np
 
@@ -51,14 +52,50 @@ def augment_face(face_img):
     augmented.append(cv2.convertScaleAbs(face_img, alpha=0.8, beta=-30))
     return augmented
 
+def get_resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        # Fallback to current directory in development mode
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+def load_dnn_model_safe(prototxt_path, model_path):
+    """Safely load DNN models bypassing OpenCV's Unicode path bug on Windows."""
+    try:
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(prototxt_path))
+            return cv2.dnn.readNetFromCaffe(os.path.basename(prototxt_path), os.path.basename(model_path))
+        finally:
+            os.chdir(orig_cwd)
+    except Exception:
+        import shutil
+        import uuid
+        safe_dir = os.path.join(os.environ.get('PUBLIC', 'C:\\'), f"dnn_temp_{uuid.uuid4().hex[:6]}")
+        os.makedirs(safe_dir, exist_ok=True)
+        safe_proto = os.path.join(safe_dir, "deploy.prototxt")
+        safe_model = os.path.join(safe_dir, "model.caffemodel")
+        shutil.copy(prototxt_path, safe_proto)
+        shutil.copy(model_path, safe_model)
+        try:
+            return cv2.dnn.readNetFromCaffe(safe_proto, safe_model)
+        finally:
+            try:
+                shutil.rmtree(safe_dir)
+            except Exception:
+                pass
+
 def capture_face_dataset(uni_id):
     ensure_required_files()
     base_dir = get_base_dir()
-    prototxt_path = os.path.join(base_dir, "models", "dnn_model", "deploy.prototxt")
-    model_path = os.path.join(base_dir, "models", "dnn_model", "res10_300x300_ssd_iter_140000.caffemodel")
+    prototxt_path = get_resource_path(os.path.join("models", "dnn_model", "deploy.prototxt"))
+    model_path = get_resource_path(os.path.join("models", "dnn_model", "res10_300x300_ssd_iter_140000.caffemodel"))
     if not os.path.exists(prototxt_path) or not os.path.exists(model_path):
         raise FileNotFoundError("DNN model files not found.")
-    net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
+    net = load_dnn_model_safe(prototxt_path, model_path)
     dataset_dir = os.path.join(base_dir, "dataset")
     if not os.path.exists(dataset_dir): os.makedirs(dataset_dir)
     cam = cv2.VideoCapture(0)

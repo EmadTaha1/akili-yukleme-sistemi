@@ -29,6 +29,30 @@ def get_model_filename(subject_id):
     
     return f"trainer_ID{subject_id}_{code}_{name}_{year}.yml"
 
+def save_lbph_model_safe(recognizer, model_save_path):
+    """Safely save LBPH models bypassing OpenCV's Unicode path bug on Windows."""
+    try:
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(model_save_path))
+            recognizer.write(os.path.basename(model_save_path))
+        finally:
+            os.chdir(orig_cwd)
+    except Exception:
+        import shutil
+        import uuid
+        safe_dir = os.path.join(os.environ.get('PUBLIC', 'C:\\'), f"lbph_temp_{uuid.uuid4().hex[:6]}")
+        os.makedirs(safe_dir, exist_ok=True)
+        safe_model = os.path.join(safe_dir, "model.yml")
+        try:
+            recognizer.write(safe_model)
+            shutil.copy(safe_model, model_save_path)
+        finally:
+            try:
+                shutil.rmtree(safe_dir)
+            except Exception:
+                pass
+
 def train_lbph_model(subject_id=None):
     """
     Trains a model with a descriptive filename.
@@ -91,5 +115,5 @@ def train_lbph_model(subject_id=None):
             try: os.remove(os.path.join(models_dir, f))
             except: pass
 
-    recognizer.write(model_save_path)
+    save_lbph_model_safe(recognizer, model_save_path)
     return True, f"Model saved as: {filename}"
