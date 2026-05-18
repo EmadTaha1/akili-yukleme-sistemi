@@ -12,8 +12,9 @@ ENV/
 # AI Models and Datasets
 # Ignore captured photos
 dataset/
-# Ignore trained LBPH models (they can be regenerated)
+# Ignore trained models (they can be regenerated)
 models/*.yml
+models/*.pkl
 
 # Database
 # Ignore actual data, but keep the database folder if needed
@@ -23,6 +24,7 @@ database/*.db
 # Generated Reports
 *.csv
 *.xlsx
+*.pdf
 Attendance_Reports/
 output/
 

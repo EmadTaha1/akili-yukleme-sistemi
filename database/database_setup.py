@@ -27,10 +27,10 @@ def setup_database():
         )
     ''')
     
-    # Insert a default teacher for testing
+    # Insert or Update default teacher (Password: admin123)
     cursor.execute('''
-        INSERT OR IGNORE INTO Teachers (teacher_id, name, email, password_hash)
-        VALUES (1, 'Admin Teacher', 'admin@university.edu', 'hashed_password_here')
+        INSERT OR REPLACE INTO Teachers (teacher_id, name, email, password_hash)
+        VALUES (1, 'Admin Teacher', 'admin@university.edu', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9')
     ''')
 
     # 2. Subjects Table (UPDATED: Added course_code and study_year)
@@ -53,6 +53,7 @@ def setup_database():
             student_id INTEGER PRIMARY KEY AUTOINCREMENT,
             university_id INTEGER UNIQUE NOT NULL,
             name TEXT NOT NULL,
+            email TEXT,
             face_encoding_path TEXT
         )
     ''')

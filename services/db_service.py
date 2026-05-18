@@ -7,12 +7,15 @@ def get_db_path():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_dir, "database", "attendance_system.db")
 
-def get_subjects():
+def get_subjects(teacher_id=None):
     """Fetch subjects from the database."""
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT subject_id, course_code, subject_name FROM Subjects")
+        if teacher_id is not None:
+            cursor.execute("SELECT subject_id, course_code, subject_name FROM Subjects WHERE teacher_id = ?", (teacher_id,))
+        else:
+            cursor.execute("SELECT subject_id, course_code, subject_name FROM Subjects")
         rows = cursor.fetchall()
     return rows
 
@@ -118,12 +121,13 @@ def process_excel_upload(file_path, subject_id):
             try:
                 uid = int(row.iloc[0])
                 name = str(row.iloc[1]).strip()
+                email = str(row.iloc[2]).strip() if len(row) > 2 and pd.notna(row.iloc[2]) else None
             except: continue
             cursor.execute("SELECT student_id FROM Students WHERE university_id = ?", (uid,))
             res = cursor.fetchone()
             if res: s_db_id = res[0]
             else:
-                cursor.execute("INSERT INTO Students (university_id, name) VALUES (?, ?)", (uid, name))
+                cursor.execute("INSERT INTO Students (university_id, name, email) VALUES (?, ?, ?)", (uid, name, email))
                 s_db_id = cursor.lastrowid
                 new_s += 1
             cursor.execute("SELECT * FROM Enrollments WHERE student_id = ? AND subject_id = ?", (s_db_id, subject_id))
@@ -143,3 +147,101 @@ def get_enrolled_student_ids(subject_id):
             WHERE Enrollments.subject_id = ?
         ''', (subject_id,))
         return {int(row[0]) for row in cursor.fetchall()}
+
+def add_student_manual(uid, name, email, subject_id):
+    db_path = get_db_path()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT student_id FROM Students WHERE university_id = ?", (uid,))
+        res = cursor.fetchone()
+        if res:
+            s_db_id = res[0]
+            if email:  # Update email if provided
+                cursor.execute("UPDATE Students SET email = ? WHERE student_id = ?", (email, s_db_id))
+        else:
+            cursor.execute("INSERT INTO Students (university_id, name, email) VALUES (?, ?, ?)", (uid, name, email))
+            s_db_id = cursor.lastrowid
+            
+        cursor.execute("SELECT * FROM Enrollments WHERE student_id = ? AND subject_id = ?", (s_db_id, subject_id))
+        if not cursor.fetchone():
+            cursor.execute("INSERT INTO Enrollments (student_id, subject_id) VALUES (?, ?)", (s_db_id, subject_id))
+            return True # Newly enrolled
+        return False # Already enrolled
+
+def delete_student_completely(student_db_id):
+    """
+    Deletes all traces of a student from the database and dataset.
+    This includes: Attendance records, Enrollments, the Student record, and all dataset images.
+    Returns the list of subject_ids they were enrolled in so the models can be re-trained.
+    """
+    import glob
+    db_path = get_db_path()
+    subject_ids = []
+    
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        
+        # Find which subjects they were in (to trigger retrain later)
+        cursor.execute("SELECT subject_id FROM Enrollments WHERE student_id = ?", (student_db_id,))
+        subject_ids = [row[0] for row in cursor.fetchall()]
+        
+        # 1. Delete Attendance
+        cursor.execute('''
+            DELETE FROM Attendance 
+            WHERE enrollment_id IN (SELECT enrollment_id FROM Enrollments WHERE student_id = ?)
+        ''', (student_db_id,))
+        
+        # 2. Delete Enrollments
+        cursor.execute("DELETE FROM Enrollments WHERE student_id = ?", (student_db_id,))
+        
+        # 3. Delete Student Record
+        cursor.execute("DELETE FROM Students WHERE student_id = ?", (student_db_id,))
+        
+        conn.commit()
+
+    # 4. Delete physical images
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dataset_dir = os.path.join(base_dir, "dataset")
+    pattern = os.path.join(dataset_dir, f"User.{student_db_id}.*.jpg")
+    for file_path in glob.glob(pattern):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"Failed to delete {file_path}: {e}")
+
+    return subject_ids
+
+def delete_subject(subject_id):
+    """
+    Deletes a subject and its related records (Enrollments, Attendance).
+    Also deletes the trained model for the subject.
+    """
+    import glob
+    db_path = get_db_path()
+    
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        
+        # 1. Delete Attendance for all enrollments in this subject
+        cursor.execute('''
+            DELETE FROM Attendance 
+            WHERE enrollment_id IN (SELECT enrollment_id FROM Enrollments WHERE subject_id = ?)
+        ''', (subject_id,))
+        
+        # 2. Delete Enrollments
+        cursor.execute("DELETE FROM Enrollments WHERE subject_id = ?", (subject_id,))
+        
+        # 3. Delete Subject
+        cursor.execute("DELETE FROM Subjects WHERE subject_id = ?", (subject_id,))
+        
+        conn.commit()
+
+    # 4. Delete trained model for this subject
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    models_dir = os.path.join(base_dir, "models")
+    pattern = os.path.join(models_dir, f"trainer_ID{subject_id}_*.pkl")
+    for file_path in glob.glob(pattern):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"Failed to delete model {file_path}: {e}")
