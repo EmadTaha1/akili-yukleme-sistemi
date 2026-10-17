@@ -76,7 +76,7 @@ def open_setup_window(master=None, teacher_id=1):
         app = ctk.CTk()
 
     app.geometry("500x600")
-    app.title("Sistem Kurulumu - Ders Ekle")
+    app.title("BioYoklama - Ders Ekle")
 
     ctk.CTkLabel(app, text="Yeni Ders Ekle", font=("Arial", 22, "bold")).pack(pady=20)
     

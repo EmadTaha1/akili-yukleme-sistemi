@@ -1,43 +1,81 @@
-# Python cache
+# ==========================================
+# Python
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
 
+# ==========================================
 # Virtual Environment
+# ==========================================
 .venv/
 env/
 venv/
 ENV/
 
+# ==========================================
 # AI Models and Datasets
-# Ignore captured photos
+# ==========================================
+# Captured student photos (large, personal data)
 dataset/
-# Ignore trained models (they can be regenerated)
+# Trained face recognition models (regenerated from dataset)
 models/*.yml
 models/*.pkl
+# Large pre-trained DNN model
+models/dnn_model/
 
+# ==========================================
 # Database
-# Ignore actual data, but keep the database folder if needed
+# ==========================================
 database/*.db
 !database/.gitkeep
 
-# Generated Reports
+# ==========================================
+# Backups (auto-generated, not needed in repo)
+# ==========================================
+backups/
+
+# ==========================================
+# Logs (auto-generated, not needed in repo)
+# ==========================================
+logs/
+
+# ==========================================
+# Generated Reports & Exports
+# ==========================================
 *.csv
 *.xlsx
 *.pdf
 Attendance_Reports/
 output/
 
-# PyInstaller / Build folders
+# ==========================================
+# PyInstaller / Build
+# ==========================================
 build/
 dist/
 *.spec
 
-# IDE settings
+# ==========================================
+# Flutter / Mobile App
+# ==========================================
+mobile_app/.dart_tool/
+mobile_app/.flutter-plugins
+mobile_app/.flutter-plugins-dependencies
+mobile_app/build/
+mobile_app/android/.gradle/
+mobile_app/android/local.properties
+mobile_app/ios/Pods/
+mobile_app/ios/.symlinks/
+
+# ==========================================
+# IDE & OS
+# ==========================================
 .vscode/
 .idea/
-
-# OS files
 .DS_Store
 Thumbs.db
-.main.spec
+*.swp
+*.swo

@@ -24,7 +24,7 @@ class AttendanceApp(ctk.CTk):
     def __init__(self, teacher_info=None):
         super().__init__()
         self.teacher_info = teacher_info or {"teacher_id": 1, "name": "Bilinmeyen Kullanıcı"}
-        self.title("Akıllı Yoklama Sistemi - Yönetici Paneli")
+        self.title("BioYoklama - Yönetici Paneli")
         self.geometry("900x600")
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -45,7 +45,7 @@ class AttendanceApp(ctk.CTk):
         except Exception as e:
             print(f"Could not load logo: {e}")
 
-        ctk.CTkLabel(self.sidebar_frame, text="Yoklama Sistemi", font=("Arial", 20, "bold")).pack(pady=(10, 30))
+        ctk.CTkLabel(self.sidebar_frame, text="BioYoklama", font=("Arial", 20, "bold")).pack(pady=(10, 30))
 
         ctk.CTkButton(self.sidebar_frame, text="Sistem Kurulumu", command=lambda: open_setup_window(self, self.teacher_info.get('teacher_id', 1))).pack(pady=10, padx=20)
         ctk.CTkButton(self.sidebar_frame, text="Öğrenci Kaydı", command=lambda: StudentEnrollmentWindow(self, self.teacher_info.get('teacher_id', 1))).pack(pady=10, padx=20)

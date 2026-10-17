@@ -63,7 +63,7 @@ class ReportsWindow(ctk.CTkToplevel):
             self.grab_set()
         
         self.geometry("1000x600")
-        self.title("Raporlar ve İstatistikler")
+        self.title("BioYoklama - Raporlar ve İstatistikler")
         if not master:
             ctk.set_appearance_mode("Dark")
 

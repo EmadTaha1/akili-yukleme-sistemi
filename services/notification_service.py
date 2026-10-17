@@ -13,7 +13,7 @@ def send_absence_email(teacher_email, teacher_app_password, student_email, stude
         msg['To'] = student_email
         msg['Subject'] = f"Yoklama Bildirimi: {subject_name} ({date})"
         
-        text = f"""Merhaba {student_name},\n\n{date} tarihinde ({week_number}. Hafta) işlenen {subject_name} dersinde 'Yok' yazıldınız.\nLütfen durumunuzu kontrol edin veya bir hata olduğunu düşünüyorsanız öğretmeninizle iletişime geçin.\n\nİyi çalışmalar,\nAkıllı Yoklama Sistemi"""
+        text = f"""Merhaba {student_name},\n\n{date} tarihinde ({week_number}. Hafta) işlenen {subject_name} dersinde 'Yok' yazıldınız.\nLütfen durumunuzu kontrol edin veya bir hata olduğunu düşünüyorsanız öğretmeninizle iletişime geçin.\n\nİyi çalışmalar,\nBioYoklama"""
         
         html = f"""
         <html>
@@ -36,7 +36,7 @@ def send_absence_email(teacher_email, teacher_app_password, student_email, stude
                   Lütfen devamsızlık durumunuzu kontrol ediniz. Eğer bu bildirimde bir hata olduğunu düşünüyorsanız, en kısa sürede ders öğretmeninizle iletişime geçiniz.
                 </p>
                 <br>
-                <p style="font-size: 14px; color: #333;">İyi çalışmalar,<br><strong>Akıllı Yoklama Sistemi</strong></p>
+                <p style="font-size: 14px; color: #333;">İyi çalışmalar,<br><strong>BioYoklama</strong></p>
               </div>
             </div>
           </body>

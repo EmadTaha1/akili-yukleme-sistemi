@@ -36,6 +36,7 @@ from services.face_service import (
 )
 from services import notification_service
 from services import backup_service
+from services import auth_service
 from services.stats_service import LiveSessionStats
 
 try:
@@ -495,7 +496,7 @@ def start_attendance_session(subject_selection, week_selection, teacher_id=1, ca
             # Handle Pause Mode
             if paused:
                 img = draw_dashboard_overlay(img, live_stats.get_current_stats(), current_fps, paused=True)
-                cv2.imshow('Yoklama Sistemi', img)
+                cv2.imshow('BioYoklama', img)
                 key = cv2.waitKey(50) & 0xFF
                 if key == 27:
                     break
@@ -639,7 +640,7 @@ def start_attendance_session(subject_selection, week_selection, teacher_id=1, ca
             # Draw header dashboard
             img = draw_dashboard_overlay(img, live_stats.get_current_stats(), current_fps)
             
-            cv2.imshow('Yoklama Sistemi', img)
+            cv2.imshow('BioYoklama', img)
             
             # Hotkeys processing
             key = cv2.waitKey(1) & 0xFF
@@ -724,7 +725,7 @@ def _ask_send_emails(enrolled_students, previously_attended, attended_today,
         cursor.execute("SELECT email, gmail_app_password FROM Teachers WHERE teacher_id = ?", (teacher_id,))
         row = cursor.fetchone()
         teacher_email = row[0]
-        app_password = row[1] if row[1] else ""
+        app_password = auth_service.deobfuscate_pwd(row[1]) if row[1] else ""
     
     # If not saved, prompt the user
     if not app_password:
@@ -740,7 +741,8 @@ def _ask_send_emails(enrolled_students, previously_attended, attended_today,
             try:
                 with sqlite3.connect(get_db_path()) as conn:
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE Teachers SET gmail_app_password = ? WHERE teacher_id = ?", (app_password, teacher_id))
+                    enc_pwd = auth_service.obfuscate_pwd(app_password)
+                    cursor.execute("UPDATE Teachers SET gmail_app_password = ? WHERE teacher_id = ?", (enc_pwd, teacher_id))
                     conn.commit()
                 logger.info("🔑 Gmail şifresi başarıyla kaydedildi")
             except Exception as e:
@@ -762,12 +764,13 @@ def _ask_send_emails(enrolled_students, previously_attended, attended_today,
                 sent_count += 1
             else:
                 fail_count += 1
+                logger.error(f"E-posta gönderme hatası ({s_email}): {err}")
     
     logger.info(f"E-postalar: Başarılı={sent_count}, Başarısız={fail_count}")
     
     if fail_count > 0:
         messagebox.showwarning("Bildirim Sonucu",
-                                f"{sent_count} öğrenciye gönderildi.\n{fail_count} başarısız.")
+                                f"{sent_count} öğrenciye gönderildi.\n{fail_count} başarısız. Hata detayları için loglara bakın.")
     else:
         messagebox.showinfo("Başarılı", f"{sent_count} öğrenciye bildirim gönderildi.")
 
@@ -782,7 +785,7 @@ def open_attendance_window(master=None, teacher_id=1):
         app = ctk.CTk()
     
     app.geometry("500x500")
-    app.title("Günlük Yoklama")
+    app.title("BioYoklama - Günlük Yoklama")
     
     ctk.CTkLabel(app, text="Ders Yoklamasını Başlat",
                  font=("Arial", 22, "bold")).pack(pady=20)

@@ -288,7 +288,7 @@ class StudentEnrollmentWindow(ctk.CTkToplevel):
         if master:
             self.grab_set() # Focus on this window
         self.geometry("600x600")
-        self.title("Öğrenci Kayıt Sistemi")
+        self.title("BioYoklama - Öğrenci Kayıt Sistemi")
         if not master:
             ctk.set_appearance_mode("Dark")
             ctk.set_default_color_theme("blue")

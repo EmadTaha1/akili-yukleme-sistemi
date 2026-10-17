@@ -1,0 +1,18 @@
+# Core
+numpy==2.4.4
+pandas==3.0.2
+Pillow==12.2.0
+
+# Computer Vision & Face Recognition
+opencv-python==4.13.0.92
+opencv-contrib-python==4.13.0.92
+
+# Excel Support
+openpyxl==3.1.5
+
+# API Server (for mobile app)
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# PDF Report Generation
+reportlab>=4.0.0

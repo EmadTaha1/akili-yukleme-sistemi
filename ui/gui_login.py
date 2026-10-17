@@ -9,7 +9,7 @@ class LoginWindow(ctk.CTk):
         super().__init__()
         self.on_success_callback = on_success_callback
         
-        self.title("Öğretmen Girişi")
+        self.title("BioYoklama - Öğretmen Girişi")
         self.geometry("400x550")
         self.resizable(False, False)
         ctk.set_appearance_mode("Dark")
