@@ -139,17 +139,24 @@ def dashboard_stats():
 def get_subjects():
     """
     Returns list of subjects assigned to the logged-in teacher.
-    Each subject includes: subject_id, course_code, subject_name
+    Each subject includes: id, code, name, academic_year, student_count
     """
     teacher = _get_teacher(request)
     if not teacher:
         return err("Unauthorized", 401)
 
     rows = db_service.get_subjects(teacher_id=teacher["teacher_id"])
-    subjects = [
-        {"id": r[0], "code": r[1], "name": r[2]}
-        for r in rows
-    ]
+    subjects = []
+    for r in rows:
+        details = db_service.get_subject_details(r[0])
+        students = db_service.get_students_by_subject(r[0])
+        subjects.append({
+            "id": r[0],
+            "code": r[1],
+            "name": r[2],
+            "academic_year": details[3] if details and len(details) > 3 else "",
+            "student_count": len(students)
+        })
     return ok({"subjects": subjects})
 
 
